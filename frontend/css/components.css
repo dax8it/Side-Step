@@ -374,6 +374,7 @@
   gap: var(--space-sm);
   cursor: pointer;
   font-size: var(--font-size-base);
+  position: relative;
 }
 .toggle__track {
   width: 34px;
@@ -405,6 +406,8 @@
 }
 .toggle input {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   padding: 0;

@@ -741,11 +741,13 @@ def _run_captions(args) -> int:
                   file=sys.stderr)
             return 1
         model = args.ai_model or get_gemini_model() or "gemini-2.5-flash"
+        use_google_search = getattr(args, "google_search", False)
         from sidestep_engine.data.caption_provider_gemini import generate_caption as _gem_cap
 
         def caption_fn(title, artist, lyrics_excerpt, audio_path):
             return _gem_cap(title, artist, api_key, audio_path=audio_path,
-                            lyrics_excerpt=lyrics_excerpt, model=model)
+                            lyrics_excerpt=lyrics_excerpt, model=model,
+                            google_search=use_google_search)
     elif provider == "openai":
         api_key = args.openai_api_key or get_openai_api_key()
         if not api_key:
