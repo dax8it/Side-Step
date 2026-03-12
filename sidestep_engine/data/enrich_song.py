@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from sidestep_engine.data.caption_config import parse_structured_response
 from sidestep_engine.data.structured_helpers import extract_caption_from_blob, looks_like_mapping_blob
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ def enrich_one(
         audio_analyze_fn: ``(audio_path) -> dict|None``.  Returns
             ``{"bpm": ..., "key": ..., "signature": ...}``.
         policy: Merge policy (``fill_missing``, ``overwrite_caption``,
-            ``overwrite_all``).
+            ``overwrite_lyrics``, ``overwrite_all``).
 
     Returns:
         Dict with keys ``status`` (``"written"``, ``"skipped"``,

@@ -238,13 +238,11 @@ def generate_caption(
             use_audio_in_video=False,
         )
 
-        # Qwen Omni expects runtime tensors on the same device as the model's
-        # input embedding / first parameter. Leaving them on CPU causes
-        # wrapper_CUDA__index_select mismatches; moving them wholesale to that
-        # primary device keeps the original working behavior while still letting
-        # Accelerate own the rest of the model placement.
-        model_device = next(_model.parameters()).device
-        inputs = inputs.to(model_device)
+        # Qwen Omni expects runtime tensors on the same device as the input
+        # embedding weights. Using the first registered parameter is unreliable
+        # with Accelerate device_map and 4-bit quantization.
+        input_device = _model.get_input_embeddings().weight.device
+        inputs = inputs.to(input_device)
 
         with torch.inference_mode():
             text_ids = _model.generate(
@@ -274,10 +272,10 @@ def generate_caption(
             artist, title,
         )
         return None
-    except Exception as exc:
-        logger.error(
-            "Local caption generation failed for '%s - %s': %s",
-            artist, title, exc,
+    except Exception:
+        logger.exception(
+            "Local caption generation failed for '%s - %s'",
+            artist, title,
         )
         return None
     finally:
