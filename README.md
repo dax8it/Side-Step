@@ -293,5 +293,6 @@ Contributions are always welcome. The inherent novelty of Audio Transformer-Base
 ---
 ## Contrubutors
 
-Massive shoutout to [Signorlimone](https://github.com/Signorlimone) for designing and compositing the Side-Step logo.
-Amazing work done by @robustini in the training pipeline and lovely optiimizations
+- Massive shoutout to [@Signorlimone](https://github.com/Signorlimone) for designing and compositing the Side-Step logo.
+
+- Amazing work done by [https://github.com/robustini](@robustini) in the training pipeline and lovely optiimizations
