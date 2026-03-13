@@ -164,10 +164,14 @@ def _levers_tracking(a: dict) -> None:
         default=a.get("target_loss_floor", 0.01), type_fn=float,
         validate_fn=lambda v: "Must be > 0 and <= 1" if v <= 0 or v > 1 else None,
     )
+    _sched_warmup = a.get("warmup_steps", 0)
+    _cruise_default = max(a.get("target_loss_warmup", 50), _sched_warmup) if _sched_warmup > 0 else a.get("target_loss_warmup", 50)
+    _cruise_min = _sched_warmup if _sched_warmup > 0 else 0
+    _cruise_hint = f" (min {_sched_warmup}, linked to scheduler warmup)" if _sched_warmup > 0 else ""
     a["target_loss_warmup"] = ask(
-        "Cruise control warmup steps",
-        default=a.get("target_loss_warmup", 50), type_fn=int,
-        validate_fn=lambda v: "Must be >= 0" if v < 0 else None,
+        f"Cruise control warmup steps{_cruise_hint}",
+        default=_cruise_default, type_fn=int,
+        validate_fn=lambda v, _m=_cruise_min: f"Must be >= {_m} (scheduler warmup)" if v < _m else ("Must be >= 0" if v < 0 else None),
     )
     a["target_loss_smoothing"] = ask(
         "Cruise control smoothing (EMA beta)",

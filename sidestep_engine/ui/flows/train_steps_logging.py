@@ -59,7 +59,15 @@ def step_logging(a: dict) -> None:
         a["early_stop_patience"] = ask("Early stop patience (0=disabled)", default=a.get("early_stop_patience", 0), type_fn=int, allow_back=True)
         a["target_loss"] = ask("Target loss cruise control (0=disabled)", default=a.get("target_loss", 0.0), type_fn=float, allow_back=True)
         if a["target_loss"] > 0:
-            a["target_loss_warmup"] = ask("  Cruise warmup steps", default=a.get("target_loss_warmup", 50), type_fn=int, allow_back=True)
+            _sched_warmup = a.get("warmup_steps", 0)
+            _cruise_default = max(a.get("target_loss_warmup", 50), _sched_warmup) if _sched_warmup > 0 else a.get("target_loss_warmup", 50)
+            _cruise_min = _sched_warmup if _sched_warmup > 0 else 0
+            _cruise_hint = f" (min {_sched_warmup}, linked to scheduler warmup)" if _sched_warmup > 0 else ""
+            a["target_loss_warmup"] = ask(
+                f"  Cruise warmup steps{_cruise_hint}",
+                default=_cruise_default, type_fn=int, allow_back=True,
+                validate_fn=lambda v, _m=_cruise_min: f"Must be >= {_m} (scheduler warmup)" if v < _m else None,
+            )
             a["target_loss_smoothing"] = ask("  Cruise smoothing (EMA beta)", default=a.get("target_loss_smoothing", 0.98), type_fn=float, allow_back=True)
     else:
         a["save_best_after"] = a.get("save_best_after") or _smart_save_best_default(a)

@@ -516,10 +516,14 @@ def run_basic_training_loop(
                         )
 
                 _lr = optimizer.param_groups[0]["lr"]
+                _pw_extra = {}
+                if _target_loss > 0 and global_step >= _CRUISE_MIN_STEPS:
+                    _pw_extra["target_loss_scale"] = _scale
+                    _pw_extra["target_loss_ema"] = _cruise_ema
                 _pw.maybe_write(step=global_step, epoch=epoch + 1,
                                 max_epochs=cfg.max_epochs, loss=avg_loss, lr=_lr,
                                 best_loss=best_loss, best_epoch=best_epoch,
-                                steps_per_epoch=steps_per_epoch)
+                                steps_per_epoch=steps_per_epoch, **_pw_extra)
                 epoch_loss += avg_loss
                 num_updates += 1
                 accumulated_loss = 0.0
@@ -573,13 +577,11 @@ def run_basic_training_loop(
 
         # Flush remainder
         if accumulation_step > 0:
-            if _scheduler_lr is not None:
-                for pg in optimizer.param_groups:
-                    pg["lr"] = _scheduler_lr
             global_step, avg_loss, updates = _flush_accumulated(
                 trainable_params, optimizer, scheduler,
                 accumulated_loss, accumulation_step, cfg, tb, module,
                 epoch, global_step, steps_per_epoch,
+                pre_scheduler_lr=_scheduler_lr,
             )
             _scheduler_lr = scheduler.get_last_lr()[0]
             if _ema is not None:
