@@ -14,15 +14,15 @@
 **Standalone training toolkit for ACE-Step 1.5 audio generation models.**
 Takes you from raw audio files to a working adapter without the friction. Variant-aware multi-adapter fine-tuning (LoRA, DoRA, LoKR, LoHA, OFT) with auto-detection, low-VRAM support, and three ways to work.
 
-> **Status:** v1.1.1-beta -- Stable enough for daily use. Some features are still experimental. This is maintained by one person only; if you encounter an issue, please let me know in the issues tab.
+> **Status:** v1.1.2-beta -- Stable enough for daily use. Some features are still experimental. This is maintained by one person only; if you encounter an issue, please let me know in the issues tab.
 
 ## Why Side-Step?
 
-Side-Step auto-detects your model variant (base, sft, or turbo), selects the scientifically correct training schedule, and runs on consumer hardware down to 8 GB VRAM. Version 1.1.1 adds Music Flamingo/Transcriber Server providers, batched caption jobs, real-time TensorBoard-parity charts, and training pipeline improvements — building on the full standalone suite introduced in 1.0.0.
+Side-Step auto-detects your model variant (base, sft, or turbo), selects the scientifically correct training schedule, and runs on consumer hardware down to 8 GB VRAM. Version 1.1.2 adds user-selectable timestep sampling (continuous or discrete) across all three interfaces, building on 1.1.1's Music Flamingo/Transcriber Server providers, batched caption jobs, TensorBoard-parity charts, and training pipeline improvements.
 
 ### What was already here
 
-- **Auto-Configured Training** -- Turbo gets discrete 8-step sampling. Base/SFT gets continuous logit-normal + CFG dropout. The upstream trainer forces the Turbo schedule on all models; Side-Step fixes this automatically.
+- **Auto-Configured Training** -- All variants default to continuous logit-normal sampling + CFG dropout. Optionally switch to discrete 8-step sampling via `--timestep-mode discrete` (CLI), the Wizard, or the GUI dropdown. The upstream trainer forces the Turbo schedule on all models; Side-Step fixes this automatically.
 - **LoRA + LoKR Adapters** -- Standard and Kronecker-product low-rank fine-tuning.
 - **Preprocessing++ (PP++)** -- Fisher Information analysis assigns adaptive per-module ranks based on how important each layer is to *your specific audio*. Writes a `fisher_map.json` that training auto-detects.
 - **Two-Pass Preprocessing** -- Converts raw audio to training tensors in two low-memory passes (~3 GB then ~6 GB).
@@ -70,6 +70,10 @@ Side-Step auto-detects your model variant (base, sft, or turbo), selects the sci
 - **TensorBoard-Parity Charts** -- The GUI training monitor now matches TensorBoard's smoothing algorithm, y-domain (P5-P95 with nice boundaries), grid counts, scroll zoom, pan, and closest-point finding. No external TensorBoard needed.
 - **CLI / Wizard / GUI Parity** -- All new features (crop modes, provider selection, endpoint URLs, HF token) are available across all three interfaces.
 - **Bug Fixes** -- `dtype` → `torch_dtype` in all `from_pretrained` calls (models were loading in default precision), LR restore on gradient flush path, caption regex truncation on apostrophes, faster TensorBoard flush (5s vs 30s), and several provider integration fixes.
+
+### New in 1.1.2
+
+- **Selectable Timestep Sampling** -- Choose between continuous (logit-normal, recommended) and discrete (8-step turbo inference schedule) timestep sampling. Available in the GUI as a dropdown, in the Wizard under "All the Levers", and via `--timestep-mode` in the CLI. Default is continuous for all model variants. Discrete mode is the legacy turbo behavior for users who want to train at exactly the 8 inference timesteps.
 
 ---
 
@@ -259,10 +263,10 @@ Run `uv run sidestep --help` for full details.
 
 Side-Step ensures your fine-tuning matches the base model's original training distribution:
 
-1. **Turbo models** -- Continuous logit-normal sampling + CFG dropout (as of v1.1.1; previously used discrete 8-step).
-2. **Base/SFT models** -- Continuous logit-normal sampling + CFG dropout (matching training).
+1. **Continuous mode** (default) -- Logit-normal sampling + CFG dropout. Recommended for all variants. Samples from a smooth distribution centered around the model's training regime.
+2. **Discrete mode** -- 8-step turbo inference schedule (shift=3.0). Legacy behavior for turbo models — trains at exactly the timestep values used during 8-step inference.
 
-The upstream trainer often forces the Turbo schedule on all models, which is incorrect for Base/SFT. Side-Step detects and fixes this automatically.
+Select via `--timestep-mode continuous|discrete` (CLI), the "Timestep sampling" dropdown (GUI), or the Wizard. The upstream trainer often forces the Turbo schedule on all models, which is incorrect for Base/SFT. Side-Step defaults to continuous for all variants and lets you override when needed.
 
 ---
 
