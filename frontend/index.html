@@ -1215,6 +1215,7 @@
                   <input class="input has-default" type="number" id="full-target-loss-warmup" value="50" data-default="50" data-validate="gte:0 int">
                   <div class="field-error"></div>
                   <div class="hint">Min steps before cruise engages</div>
+                  <div id="warn-cruise-warmup" class="field-warning" style="display:none;"></div>
                 </div>
                 <div class="form-group">
                   <label class="form-group__label">Smoothing (EMA β) <span class="help-icon" data-help="help-full-target-loss-smoothing">?</span></label>
@@ -1570,72 +1571,121 @@
           </div>
         </div>
 
-        <!-- Main two-panel: Loss chart + GPU -->
+        <!-- Full-width: Main chart panel -->
+        <div class="panel" style="margin-bottom: var(--space-md);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); flex-wrap: wrap; gap: 4px;">
+            <div class="panel__title" style="margin-bottom: 0;">Loss</div>
+            <div class="chart-toolbar">
+              <div class="chart-toolbar__group">
+                <button class="btn btn--sm chart-toggle active" data-series="loss" aria-pressed="true">Loss</button>
+                <button class="btn btn--sm chart-toggle active" data-series="ma5" aria-pressed="true">MA5</button>
+                <button class="btn btn--sm chart-toggle active" data-series="lr" aria-pressed="true">LR</button>
+              </div>
+              <div class="chart-toolbar__group">
+                <button class="btn btn--sm chart-axis" data-axis="step" aria-pressed="false">per Step</button>
+                <button class="btn btn--sm chart-axis active" data-axis="epoch" aria-pressed="true">per Epoch</button>
+              </div>
+              <div class="chart-toolbar__group" style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 10px; color: var(--muted);">Smooth</span>
+                <input type="range" id="chart-smoothing" min="0" max="999" value="600" style="width: 60px; height: 14px; accent-color: var(--primary);">
+                <span id="chart-smoothing-val" style="font-size: 10px; color: var(--muted); min-width: 28px;">0.60</span>
+              </div>
+              <div class="chart-toolbar__group">
+                <button class="btn btn--sm chart-snap" id="btn-snap-grid" title="Snap cursor to data points (S)" aria-pressed="true">S</button>
+                <button class="btn btn--sm chart-zoom" data-zoom="reset" title="Fit to data (reset zoom)">&#x22A1;</button>
+              </div>
+            </div>
+          </div>
+          <div class="monitor-chart-grid" id="monitor-chart-area">
+            <!-- Y-axis labels LEFT (loss scale) -->
+            <div class="monitor-chart-grid__yaxis" id="monitor-y-labels"></div>
+            <!-- Series area: SVG + overlays -->
+            <div class="monitor-chart-grid__series" id="monitor-series-area">
+              <!-- Legend -->
+              <div class="monitor-chart-grid__legend" id="monitor-legend">
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 2px; background: var(--primary);"></span><span style="color: var(--primary);">Loss</span></span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--changed);"></span><span style="color: var(--changed);">MA5</span></span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 0; border-top: 2px dotted var(--secondary);"></span><span style="color: var(--secondary);">LR</span></span>
+              </div>
+              <!-- SVG: gridlines + data polylines -->
+              <svg preserveAspectRatio="none" id="monitor-loss-svg">
+                <g id="monitor-grid-lines"></g>
+                <polyline id="monitor-loss-raw" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke" opacity="0.3" points="" />
+                <polyline id="monitor-loss-line" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke" points="" />
+                <polyline id="monitor-ma-line" fill="none" stroke="var(--changed)" stroke-width="2" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" opacity="0.7" points="" />
+                <polyline id="monitor-lr-line" fill="none" stroke="var(--secondary)" stroke-width="2" stroke-dasharray="2,3" vector-effect="non-scaling-stroke" opacity="0.85" points="" />
+              </svg>
+              <!-- Hover dot markers (HTML overlay — avoids SVG preserveAspectRatio distortion) -->
+              <div id="monitor-hover-dots" style="display:none; position:absolute; inset:0; pointer-events:none; z-index:5;">
+                <div id="dot-smooth" class="chart-hover-dot chart-hover-dot--smooth"></div>
+                <div id="dot-raw"    class="chart-hover-dot chart-hover-dot--raw"></div>
+                <div id="dot-ma5"    class="chart-hover-dot chart-hover-dot--ma5"></div>
+                <div id="dot-lr"     class="chart-hover-dot chart-hover-dot--lr"></div>
+              </div>
+              <!-- Drag-zoom overlay -->
+              <div id="chart-drag-overlay" class="chart-zoom-box" style="display:none; position:absolute; pointer-events:none; z-index:4;"></div>
+              <!-- Crosshair -->
+              <div id="chart-crosshair" style="display:none; position:absolute; top:0; bottom:0; width:1px; background:var(--muted); opacity:0.5; pointer-events:none; z-index:3;"></div>
+              <!-- Tooltip (dark TB style) -->
+              <div id="chart-tooltip" class="chart-tooltip--tb" style="display:none;"></div>
+              <!-- Zoom hint -->
+              <div class="chart-zoom-hint" id="chart-zoom-hint" data-hint="Alt + Scroll to Zoom"></div>
+            </div>
+            <!-- Corner dot -->
+            <div class="monitor-chart-grid__dot"></div>
+            <!-- X-axis labels -->
+            <div class="monitor-chart-grid__xaxis" id="monitor-x-labels"></div>
+            <!-- Y-axis labels RIGHT (LR scale) -->
+            <div class="monitor-chart-grid__yaxis-r" id="monitor-y-labels-right"></div>
+          </div>
+        </div>
+
+        <!-- Expanded mini-chart (one at a time, same design as main chart) -->
+        <div id="monitor-expanded-chart" class="monitor-expanded-chart" style="display:none;">
+          <div class="monitor-expanded-chart__header">
+            <span class="monitor-expanded-chart__title" id="expanded-chart-title">--</span>
+            <span class="monitor-expanded-chart__value" id="expanded-chart-value">--</span>
+            <button class="btn btn--sm monitor-expanded-chart__close" id="btn-close-expanded" title="Collapse">&times;</button>
+          </div>
+          <div class="monitor-chart-grid monitor-chart-grid--expanded" id="expanded-chart-area">
+            <div class="monitor-chart-grid__yaxis" id="expanded-y-labels"></div>
+            <div class="monitor-chart-grid__series" id="expanded-series-area">
+              <svg preserveAspectRatio="none" id="expanded-svg">
+                <g id="expanded-grid-lines"></g>
+                <polyline id="expanded-line" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke" opacity="0.3" points="" />
+                <polyline id="expanded-smooth-line" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke" points="" />
+              </svg>
+              <!-- Hover dot (HTML overlay — avoids SVG distortion) -->
+              <div id="expanded-hover-dots" style="display:none; position:absolute; inset:0; pointer-events:none; z-index:5;">
+                <div id="expanded-dot" class="chart-hover-dot chart-hover-dot--smooth"></div>
+              </div>
+              <div id="expanded-crosshair" style="display:none; position:absolute; top:0; bottom:0; width:1px; background:var(--muted); opacity:0.5; pointer-events:none; z-index:3;"></div>
+              <div id="expanded-tooltip" class="chart-tooltip--tb" style="display:none;"></div>
+              <div class="chart-zoom-hint" data-hint="Alt + Scroll to Zoom"></div>
+            </div>
+            <div class="monitor-chart-grid__dot"></div>
+            <div class="monitor-chart-grid__xaxis" id="expanded-x-labels"></div>
+            <div class="monitor-chart-grid__yaxis-r" style="visibility:hidden;"></div>
+          </div>
+        </div>
+
+        <!-- Mini-charts for additional TensorBoard scalars (dynamically populated) -->
+        <div id="monitor-mini-charts" class="monitor-mini-charts"></div>
+
+        <!-- Stats row (full-width) -->
+        <div class="stats-row" style="margin-bottom: var(--space-lg);">
+          <div class="stat"><div class="stat__label">Current Loss</div><div class="stat__value" id="monitor-loss">--</div></div>
+          <div class="stat"><div class="stat__label">Best Loss</div><div class="stat__value stat__value--success" id="monitor-best-loss">--</div></div>
+          <div class="stat"><div class="stat__label">Best Epoch</div><div class="stat__value" id="monitor-best-epoch">--</div></div>
+          <div class="stat"><div class="stat__label">Learning Rate</div><div class="stat__value" id="monitor-lr">--</div></div>
+          <div class="stat"><div class="stat__label">MA5</div><div class="stat__value" id="monitor-ma5">--</div></div>
+        </div>
+
+        <!-- Main two-panel: Controls/Log + GPU -->
         <div class="monitor-grid">
 
-          <!-- Left: Loss chart + stats -->
+          <!-- Left: Controls + Log -->
           <div>
-            <div class="panel" style="margin-bottom: var(--space-md);">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
-                <div class="panel__title" style="margin-bottom: 0;">Loss</div>
-                <div class="chart-toolbar">
-                  <div class="chart-toolbar__group">
-                    <button class="btn btn--sm chart-toggle active" data-series="loss" aria-pressed="true">Loss</button>
-                    <button class="btn btn--sm chart-toggle active" data-series="ma5" aria-pressed="true">MA5</button>
-                    <button class="btn btn--sm chart-toggle active" data-series="lr" aria-pressed="true">LR</button>
-                  </div>
-                  <div class="chart-toolbar__group">
-                    <button class="btn btn--sm chart-axis" data-axis="step" aria-pressed="false">per Step</button>
-                    <button class="btn btn--sm chart-axis active" data-axis="epoch" aria-pressed="true">per Epoch</button>
-                  </div>
-                  <div class="chart-toolbar__group" style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 10px; color: var(--muted);">Smooth</span>
-                    <input type="range" id="chart-smoothing" min="0" max="99" value="60" style="width: 60px; height: 14px; accent-color: var(--primary);">
-                    <span id="chart-smoothing-val" style="font-size: 10px; color: var(--muted); min-width: 28px;">0.6</span>
-                  </div>
-                  <div class="chart-toolbar__group">
-                    <button class="btn btn--sm chart-zoom" data-zoom="reset" title="Fit to data (reset zoom)">⊡</button>
-                  </div>
-                </div>
-              </div>
-              <div class="chart-area" style="min-height: 240px; position: relative; overflow: hidden;" id="monitor-chart-area">
-                <!-- Y-axis labels LEFT (loss scale) -->
-                <div id="monitor-y-labels" style="position: absolute; left: 0; top: 0; bottom: 20px; width: 48px; z-index: 2; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;"></div>
-                <!-- Y-axis labels RIGHT (LR scale) -->
-                <div id="monitor-y-labels-right" style="position: absolute; right: 0; top: 0; bottom: 20px; width: 52px; z-index: 2; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;"></div>
-                <!-- X-axis labels -->
-                <div id="monitor-x-labels" class="axis-label-row" style="position: absolute; left: 48px; right: 52px; bottom: 0; z-index: 2; pointer-events: none;"></div>
-                <!-- Legend (HTML) -->
-                <div id="monitor-legend" style="position: absolute; top: 6px; right: 60px; z-index: 2; display: flex; gap: 12px; font-size: 11px; font-family: var(--font-mono); pointer-events: none;">
-                  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 2px; background: var(--primary);"></span><span style="color: var(--primary);">Loss</span></span>
-                  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--changed);"></span><span style="color: var(--changed);">MA5</span></span>
-                  <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 16px; height: 0; border-top: 2px dotted var(--secondary);"></span><span style="color: var(--secondary);">LR</span></span>
-                </div>
-                <!-- SVG: gridlines + data polylines -->
-                <svg style="position: absolute; left: 48px; top: 0; right: 52px; bottom: 20px; width: calc(100% - 100px); height: calc(100% - 20px);" preserveAspectRatio="none" id="monitor-loss-svg">
-                  <g id="monitor-grid-lines"></g>
-                  <polyline id="monitor-loss-raw" fill="none" stroke="var(--primary)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.2" points="" />
-                  <polyline id="monitor-loss-line" fill="none" stroke="var(--primary)" stroke-width="1.2" vector-effect="non-scaling-stroke" points="" />
-                  <polyline id="monitor-ma-line" fill="none" stroke="var(--changed)" stroke-width="1" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" opacity="0.7" points="" />
-                  <polyline id="monitor-lr-line" fill="none" stroke="var(--secondary)" stroke-width="0.9" stroke-dasharray="2,3" vector-effect="non-scaling-stroke" opacity="0.85" points="" />
-                </svg>
-                <!-- Drag-zoom overlay (shown while dragging) -->
-                <div id="chart-drag-overlay" style="display:none; position:absolute; background:rgba(92,207,230,0.12); border:1px solid var(--primary); pointer-events:none; z-index:4;"></div>
-                <!-- Crosshair + tooltip -->
-                <div id="chart-crosshair" style="display:none; position:absolute; top:0; bottom:20px; width:1px; background:var(--muted); opacity:0.5; pointer-events:none; z-index:3;"></div>
-                <div id="chart-tooltip" style="display:none; position:absolute; z-index:5; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:4px 8px; font-size:10px; font-family:var(--font-mono); pointer-events:none; white-space:nowrap;"></div>
-              </div>
-            </div>
-
-            <!-- Stats row -->
-            <div class="stats-row" style="margin-bottom: var(--space-lg);">
-              <div class="stat"><div class="stat__label">Current Loss</div><div class="stat__value" id="monitor-loss">--</div></div>
-              <div class="stat"><div class="stat__label">Best Loss</div><div class="stat__value stat__value--success" id="monitor-best-loss">--</div></div>
-              <div class="stat"><div class="stat__label">Best Epoch</div><div class="stat__value" id="monitor-best-epoch">--</div></div>
-              <div class="stat"><div class="stat__label">Learning Rate</div><div class="stat__value" id="monitor-lr">--</div></div>
-              <div class="stat"><div class="stat__label">MA5</div><div class="stat__value" id="monitor-ma5">--</div></div>
-            </div>
-
             <!-- Controls (toggled, never destroyed) -->
             <div id="monitor-controls" style="display: flex; gap: var(--space-md); margin-bottom: var(--space-lg);">
               <button class="btn btn--danger" id="btn-stop">Stop Training</button>
@@ -1770,7 +1820,7 @@
               <div class="panel__title" style="margin:0;">Loss Curves (overlaid)</div>
               <div style="display:flex;align-items:center;gap:var(--space-sm);font-size:var(--font-size-xs);color:var(--muted);">
                 <span>Smooth</span>
-                <input type="range" min="0" max="95" value="0" id="compare-smoothing" style="width:80px;">
+                <input type="range" min="0" max="999" value="0" id="compare-smoothing" style="width:80px;">
                 <span id="compare-smoothing-val" style="font-family:var(--font-mono);min-width:28px;">0.00</span>
                 <button class="btn btn--sm" id="btn-compare-zoom-reset" title="Reset zoom">↺</button>
               </div>
@@ -1780,9 +1830,7 @@
               <div id="compare-y-labels" style="display:flex;flex-direction:column;justify-content:space-between;padding:4px 0;min-width:44px;text-align:right;"></div>
               <div class="chart-area" style="min-height: 200px; flex: 1; position:relative;" id="compare-chart-area">
                 <svg viewBox="0 0 400 160" style="width: 100%; height: 100%;" preserveAspectRatio="none" id="compare-loss-svg">
-                  <line x1="0" y1="40"  x2="400" y2="40"  stroke="var(--border)" stroke-width="0.5" />
-                  <line x1="0" y1="80"  x2="400" y2="80"  stroke="var(--border)" stroke-width="0.5" />
-                  <line x1="0" y1="120" x2="400" y2="120" stroke="var(--border)" stroke-width="0.5" />
+                  <g id="compare-grid-lines"></g>
                   <polyline id="compare-raw-a" fill="none" stroke="var(--primary)" stroke-width="0.9" opacity="0.2" points="" />
                   <polyline id="compare-raw-b" fill="none" stroke="var(--warning)" stroke-width="0.9" opacity="0.2" points="" />
                   <polyline id="compare-line-a" fill="none" stroke="var(--primary)" stroke-width="1.3" points="" />
